@@ -1,0 +1,63 @@
+services:
+  identiproxy:
+    image: tellariel/identiproxy:0.1
+    links:
+      - identidock
+    ports:
+      - "80:80"
+    environment:
+      - NGINX_HOST=$(hostname -i)
+      - NGINX_PROXY=http://identidock:9090
+  identidock:
+    image: tellariel/identidock:0.2
+    links:
+      - dnmonster
+      - redis
+    environment:
+      ENV: PROD
+  dnmonster:
+    image: amouat/dnmonster
+  redis:
+    image: redis:7.2
+  logspout:
+    image: amouat/logspout-logstash
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock
+    ports:
+      - "8000:80"
+    links:
+      - logstash
+    command: logstash://logstash:5000
+  logstash:
+    image: logstash:8.10.2
+    volumes:
+      - ./logstash.conf:/etc/logstash.conf
+    environment:
+      LOGSPOUT: ignore
+    links: 
+      - elasticsearch
+    command: -f /etc/logstash.conf
+  elasticsearch:
+    image: elasticsearch:8.10.2
+    environment:
+      LOGSPOUT: ignore
+      ES_JAVA_OPTS: "-Xms2g -Xmx2g"
+      xpack.security.enabled: false
+      discovery.type: single-node
+    ulimits:
+      nofile:
+        soft: "65536"
+        hard: "65536"
+  # securityContext:
+    # privileged: true
+    #command: ["sh", "-c", "echo", "vm.max_map_count=262144", ">>", "/etc/sysctl.conf"]
+    #command: ["sysctl", "vm.max_map_count"]
+  kibana:
+    image: kibana:8.10.2
+    environment:
+      LOGSPOUT: ignore
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+    links:
+      - elasticsearch
+    ports:
+    - "5601:5601"
